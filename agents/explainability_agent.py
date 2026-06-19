@@ -1,15 +1,9 @@
 import shap
 import pandas as pd
-import os
 
 class ExplainabilityAgent:
     def __init__(self):
-        # Use relative path for deployment
-        # Assumes solar_data4.csv is in the root of your repo
-        self.background_path = os.path.join(
-            os.path.dirname(__file__), "..", "solar_data4.csv"
-        )
-        # Or simply: "solar_data4.csv" if it's directly in root
+        self.background_path = "solar_data4.csv"  # ✅ relative path for Render
 
     def explain(self, model, X):
         try:
@@ -23,10 +17,10 @@ class ExplainabilityAgent:
             ]
             X = X[order]
 
-            # Load background dataset from repo root
             full_df = pd.read_csv(self.background_path)
-            background = full_df[order]
+            background = full_df[order].sample(100, random_state=42)
 
+            # ✅ TreeExplainer for regression
             explainer = shap.TreeExplainer(model, background)
             shap_values = explainer.shap_values(X)
 
