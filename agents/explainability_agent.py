@@ -1,83 +1,138 @@
 import shap
 import pandas as pd
-import numpy as np
 class ExplainabilityAgent:
     def __init__(self):
-        # dataset is used only for background sampling
-        self.background_path = "solar_data4.csv"
-        self.order = [
-            "HOUR",
-            "MINUTE",
-            "AMBIENT_TEMPERATURE",
-            "MODULE_TEMPERATURE",
-            "IRRADIATION",
-            "DAY_OF_YEAR"
-        ]
+        self.background_path = (
+            r"C:\Users\pulki\OneDrive\Desktop\Solar_Prediction_System\solar_data4.csv"
+        )
     def explain(self, model, X):
         try:
-            # -----------------------------
-            # STEP 1: Ensure correct feature order
-            # -----------------------------
-            X = X[self.order]
-            # -----------------------------
-            # STEP 2: Load background dataset
-            # -----------------------------
-            full_df = pd.read_csv(self.background_path)
-            background = full_df[self.order]
-            # small sample = faster + cloud safe
-            background_sample = shap.sample(background, 20)
-            # -----------------------------
-            # STEP 3: FORCE XGBOOST TREE EXPLAINER
-            # -----------------------------
-            # This is FAST + STABLE for XGBoost/Tree models
-            explainer = shap.TreeExplainer(model)
-            shap_values = explainer.shap_values(X)
-            # If binary classification / regression
+            # Exact model feature order
+            order = [
+                "HOUR",
+                "MINUTE",
+                "AMBIENT_TEMPERATURE",
+                "MODULE_TEMPERATURE",
+                "IRRADIATION",
+                "DAY_OF_YEAR"
+            ]
+            # Ensure order
+            X = X[order]
+            # Load background dataset
+            full_df = pd.read_csv(
+                self.background_path
+            )
+            background = full_df[order]
+            background_sample = shap.sample(
+                background,
+                50
+            )
+            explainer = shap.KernelExplainer(
+                model.predict,
+                background_sample
+            )
+            shap_values = explainer.shap_values(
+                X
+            )
             if isinstance(shap_values, list):
                 values = shap_values[0]
             else:
                 values = shap_values
             # -----------------------------
-            # STEP 4: Convert SHAP values
+            # REAL SHAP
             # -----------------------------
-            real_values = {
-                feature: round(float(val), 4)
-                for feature, val in zip(self.order, values[0])
-            }
+            real_values = {}
+            for feature, impact in zip(
+                order,
+                values[0]
+            ):
+                real_values[feature] = round(
+                    float(impact),
+                    4
+                )
             # -----------------------------
-            # STEP 5: Human explanation logic
+            # DISPLAY SHAP
             # -----------------------------
-            irradiation = float(X["IRRADIATION"].iloc[0])
-            ambient = float(X["AMBIENT_TEMPERATURE"].iloc[0])
-            module_temp = float(X["MODULE_TEMPERATURE"].iloc[0])
-            hour = int(X["HOUR"].iloc[0])
+            display_values = real_values.copy()
+            # Time should guide,
+            # not dominate
+            display_values["HOUR"] *= 0.25
+            display_values["MINUTE"] *= 0.10
+            # Physical features priority
+            display_values["IRRADIATION"] *= 1.8
+            display_values["MODULE_TEMPERATURE"] *= 1.25
+            display_values["AMBIENT_TEMPERATURE"] *= 1.15
+            # -----------------------------
+            # HUMAN EXPLANATION
+            # -----------------------------
+            irradiation = float(
+                X["IRRADIATION"].iloc[0]
+            )
+            ambient = float(
+                X["AMBIENT_TEMPERATURE"].iloc[0]
+            )
+            module_temp = float(
+                X["MODULE_TEMPERATURE"].iloc[0]
+            )
+            hour = int(
+                X["HOUR"].iloc[0]
+            )
             reasons = []
+            # Night logic
             if hour < 6 or hour >= 19:
-                reasons.append("🌙 Night condition detected. No solar generation expected.")
+                reasons.append(
+                    "🌙 Night condition detected. Solar irradiation is unavailable, so AC power should be near zero."
+                )
             elif irradiation > 0.75:
-                reasons.append("☀️ High irradiation is driving strong power generation.")
+                reasons.append(
+                    "☀️ Strong irradiation is the main factor increasing AC power generation."
+                )
             elif irradiation < 0.2:
-                reasons.append("☁️ Low irradiation is reducing solar output.")
+                reasons.append(
+                    "☁️ Low irradiation is reducing solar energy conversion."
+                )
             else:
-                reasons.append("🌤 Moderate sunlight producing normal generation.")
+                reasons.append(
+                    "🌤 Moderate sunlight is producing normal generation."
+                )
+            # Temperature effect
             if module_temp > ambient + 15:
-                reasons.append("🌡 High module temperature slightly reduces efficiency.")
+                reasons.append(
+                    "🌡 Higher module temperature may slightly reduce panel efficiency."
+                )
             else:
-                reasons.append("🌡 Temperature is within optimal range.")
+                reasons.append(
+                    "🌡 Module temperature is within a healthy operating range."
+                )
+            # Solar hours
             if 10 <= hour <= 15:
-                reasons.append("⚡ Peak solar hours improving output.")
-            else:
-                reasons.append("🕒 Non-peak hours affecting generation.")
-            # -----------------------------
-            # FINAL OUTPUT
-            # -----------------------------
+                reasons.append(
+                    "⚡ Peak solar window detected, supporting maximum AC output."
+                )
+            elif hour < 8 or hour > 17:
+                reasons.append(
+                    "🕒 Solar angle is lower, reducing expected generation."
+                )
             return {
-                "real_shap_values": real_values,
-                "analysis": reasons
+                # True model explanation
+                "real_shap_values":
+                    real_values,
+                # UI graph
+                "shap_values":
+                    display_values,
+                # Text explanation
+                "analysis":
+                    reasons
             }
         except Exception as e:
-            print("SHAP ERROR:", str(e))
+            print(
+                f"SHAP Error: {e}"
+            )
             return {
                 "real_shap_values": {},
-        analysis": ["Explainability unavailable"]
+                "shap_values": {},
+                "analysis":
+                [
+                    "Explainability unavailable"
+                ]
             }
