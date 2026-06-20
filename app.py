@@ -4,7 +4,7 @@ import pandas as pd
 from fpdf import FPDF
 from dotenv import load_dotenv
 from zoneinfo import ZoneInfo
-import os
+import re
 
 
 from agents.input_agent import InputAgent
@@ -16,10 +16,9 @@ from agents.decision_agent import DecisionAgent
 load_dotenv()
 
 
-# ================= IST TIME =================
+# ================= IST =================
 
 IST = ZoneInfo("Asia/Kolkata")
-
 current_time = datetime.now(IST)
 
 
@@ -32,6 +31,20 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+
+
+# ================= CLEAN REPORT =================
+
+def clean_report(text):
+
+    text = re.sub(
+        r"<[^>]*>",
+        "",
+        text
+    )
+
+    return text.strip()
 
 
 
@@ -48,7 +61,6 @@ background:linear-gradient(90deg,#f59e0b,#ef4444);
 -webkit-background-clip:text;
 -webkit-text-fill-color:transparent;
 }
-
 
 .subtitle{
 color:#64748b;
@@ -83,14 +95,13 @@ background:white;
 padding:30px;
 border-radius:20px;
 border-left:8px solid #f59e0b;
-box-shadow:0 10px 30px rgba(0,0,0,.08);
+box-shadow:0 10:30px rgba(0,0,0,.08);
 }
 
 </style>
 """,
 unsafe_allow_html=True
 )
-
 
 
 
@@ -112,7 +123,6 @@ unsafe_allow_html=True
 
 
 
-
 # ================= PDF =================
 
 
@@ -121,7 +131,6 @@ def generate_pdf(report,power,daily_yield,features):
     pdf = FPDF()
 
     pdf.add_page()
-
 
     pdf.set_font(
         "Helvetica",
@@ -272,8 +281,6 @@ if run:
         try:
 
 
-            # INPUT
-
             input_agent = InputAgent()
 
 
@@ -286,8 +293,6 @@ if run:
             )
 
 
-
-            # PREDICTION
 
             predictor = PredictionAgent()
 
@@ -306,8 +311,6 @@ if run:
 
 
 
-
-
             # DAILY YIELD
 
             hour = features["HOUR"]
@@ -316,15 +319,12 @@ if run:
 
 
             if hour < 6:
-
                 effective_hours = 8
 
             elif hour >= 19:
-
                 effective_hours = 0
 
             else:
-
                 effective_hours = 18-hour
 
 
@@ -352,9 +352,6 @@ if run:
 
 
 
-
-            # REPORT
-
             decision = DecisionAgent()
 
 
@@ -365,10 +362,12 @@ if run:
             )
 
 
+            report = clean_report(report)
 
 
 
-            # DASHBOARD
+
+            # ================= DASHBOARD =================
 
 
             c1,c2,c3,c4 = st.columns(4)
@@ -379,8 +378,14 @@ if run:
                 st.markdown(
                 f"""
                 <div class="card">
-                <div class="small-title">⚡ AC POWER</div>
-                <div class="metric">{power:.1f}</div>
+                <div class="small-title">
+                ⚡ AC POWER
+                </div>
+
+                <div class="metric">
+                {power:.1f}
+                </div>
+
                 Watt
                 </div>
                 """,
@@ -394,8 +399,14 @@ if run:
                 st.markdown(
                 f"""
                 <div class="card">
-                <div class="small-title">🔋 DAILY YIELD</div>
-                <div class="metric">{daily_yield:.2f}</div>
+                <div class="small-title">
+                🔋 DAILY YIELD
+                </div>
+
+                <div class="metric">
+                {daily_yield:.2f}
+                </div>
+
                 kWh
                 </div>
                 """,
@@ -409,7 +420,10 @@ if run:
                 st.markdown(
                 f"""
                 <div class="card">
-                <div class="small-title">🌡 TEMP</div>
+                <div class="small-title">
+                🌡 TEMP
+                </div>
+
                 <div class="metric">
                 {features['AMBIENT_TEMPERATURE']}
                 </div>
@@ -423,6 +437,7 @@ if run:
 
             with c4:
 
+
                 if hour < 6 or hour >=19:
                     status="🌙 Night"
 
@@ -433,15 +448,23 @@ if run:
                     status="🌤 Normal"
 
 
+
                 st.markdown(
                 f"""
                 <div class="card">
-                <div class="small-title">STATUS</div>
-                <div class="metric">{status}</div>
+                <div class="small-title">
+                STATUS
+                </div>
+
+                <div class="metric">
+                {status}
+                </div>
+
                 </div>
                 """,
                 unsafe_allow_html=True
                 )
+
 
 
 
@@ -451,6 +474,7 @@ if run:
 
 
             left,right = st.columns(2)
+
 
 
             with left:
@@ -481,6 +505,8 @@ if run:
 
 
 
+
+
             with right:
 
                 st.subheader(
@@ -501,7 +527,9 @@ if run:
 
 
 
+
             st.divider()
+
 
 
             st.subheader(
@@ -510,14 +538,39 @@ if run:
 
 
             st.markdown(
-                f"""
-                <div class="report">
+                report
+            )
 
-                {report}
 
-                </div>
-                """,
-                unsafe_allow_html=True
+
+            # SYSTEM NOTICE
+
+            st.markdown(
+            """
+            <div class="card">
+
+            <h3>🛠️ System Reliability Notice</h3>
+
+            <p>
+            This prediction is generated using AI based solar analysis.
+            If production is lower than expected, inspect:
+            </p>
+
+            <ul>
+            <li>☀️ Panel dust or shading</li>
+            <li>🔌 Inverter performance</li>
+            <li>⚡ Wiring losses</li>
+            <li>🌡 Temperature losses</li>
+            <li>🔧 Hardware maintenance</li>
+            </ul>
+
+            <p>
+            For abnormal values, consult a qualified solar technician.
+            </p>
+
+            </div>
+            """,
+            unsafe_allow_html=True
             )
 
 
@@ -528,6 +581,7 @@ if run:
                 daily_yield,
                 features
             )
+
 
 
             st.download_button(
