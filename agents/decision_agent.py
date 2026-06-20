@@ -19,17 +19,23 @@ class DecisionAgent:
             0
         )
 
-        hour = features["HOUR"]
-        minute = features["MINUTE"]
+        hour = int(features["HOUR"])
+        minute = int(features["MINUTE"])
 
-        irradiation = features["IRRADIATION"]
+        irradiation = float(
+            features["IRRADIATION"]
+        )
 
-        ambient_temp = features["AMBIENT_TEMPERATURE"]
-        module_temp = features["MODULE_TEMPERATURE"]
+        ambient_temp = float(
+            features["AMBIENT_TEMPERATURE"]
+        )
+
+        module_temp = float(
+            features["MODULE_TEMPERATURE"]
+        )
 
 
         current_time = f"{hour:02d}:{minute:02d}"
-
 
 
         # ----------------------------
@@ -58,23 +64,17 @@ class DecisionAgent:
 
 
 
-
         # ----------------------------
-        # Daily Yield
+        # Yield
         # ----------------------------
 
         power_kw = ac_power / 1000
 
 
-        estimated_yield = (
+        estimated_yield = round(
             power_kw *
             irradiation *
-            effective_hours
-        )
-
-
-        estimated_yield = round(
-            estimated_yield,
+            effective_hours,
             2
         )
 
@@ -98,15 +98,15 @@ class DecisionAgent:
 
 
 
-
+        # ----------------------------
+        # Gemini Prompt
+        # ----------------------------
 
         prompt = f"""
 
-You are an expert solar plant consultant.
+You are a solar plant expert.
 
-Create a professional solar performance report.
-
-DATA:
+Generate a professional report.
 
 Current Time:
 {current_time}
@@ -117,44 +117,38 @@ Solar Period:
 AC Power:
 {ac_power:.2f} Watt
 
+
 Estimated Daily Yield:
 {estimated_yield} kWh
+
 
 Weather:
 {weather}
 
+
 Ambient Temperature:
 {ambient_temp} °C
+
 
 Module Temperature:
 {module_temp} °C
 
 
-Feature Impact:
+Explainable AI Feature Impact:
 {explanation}
 
 
-Create report:
+Report format:
 
 ## 📊 Executive Summary
 
-Explain current solar plant status.
-
-
-## ⚡ Power Generation
-
-Explain whether current AC power is normal.
-
+## ⚡ Power Generation Status
 
 ## 🔋 Expected Daily Yield
-
-Explain expected energy production.
-
 
 ## 🔍 Why This Prediction?
 
 Explain:
-
 - irradiation effect
 - temperature effect
 - time effect
@@ -163,47 +157,47 @@ Explain:
 ## ⚠️ Performance Check
 
 Mention:
-
 - night condition
-- low irradiation
+- low sunlight
 - temperature losses
 
 
 ## 🛠 Hardware Recommendation
 
-If output looks abnormal suggest:
+If prediction and actual output differ:
 
-- inverter checking
-- panel cleaning
-- wiring inspection
-- technician inspection if required
+- Check inverter
+- Inspect wiring
+- Clean solar panels
+- Contact technician if required
 
 
 ## ✅ Recommendations
 
-Give 3 practical suggestions.
-
 
 Rules:
-
-- Use Markdown only
-- Do not use HTML
-- Never write <div>
-- Keep professional language
+- Markdown only
+- No HTML
+- Do not write div tags
 
 """
 
-
-
-        # ----------------------------
-        # Gemini + fallback
-        # ----------------------------
 
         try:
 
             response = ask_gemini(
                 prompt
             )
+
+
+            if response is None:
+
+                raise Exception(
+                    "Empty Gemini response"
+                )
+
+
+            response = str(response)
 
 
             response = (
@@ -222,43 +216,55 @@ Rules:
         except Exception:
 
 
-            # Local fallback report
+            # ----------------------------
+            # Local fallback
+            # ----------------------------
+
+            if hour < 6 or hour >= 19:
+
+                status = (
+                    "Night condition detected. "
+                    "Solar generation is expected near zero."
+                )
+
+            elif irradiation < 0.2:
+
+                status = (
+                    "Low irradiation detected. "
+                    "Reduced generation expected."
+                )
+
+            else:
+
+                status = (
+                    "Solar generation condition appears normal."
+                )
+
 
             return f"""
 
 ## 📊 Executive Summary
 
-SolarWise AI predicted the current solar plant condition.
+SolarWise AI completed the solar analysis.
 
-Current AC Power:
+
+## ⚡ Power Generation Status
+
+
+Predicted AC Power:
 
 **{ac_power:.2f} Watt**
 
 
-Solar Period:
+Condition:
 
-**{period}**
-
-
-
-## ⚡ Power Generation
-
-The predicted generation depends on:
-
-- Solar irradiation
-- Temperature
-- Current time
-
-
-Current condition:
-
-**{weather}**
-
+**{status}**
 
 
 ## 🔋 Expected Daily Yield
 
-Estimated daily production:
+
+Estimated yield:
 
 **{estimated_yield} kWh**
 
@@ -266,67 +272,39 @@ Estimated daily production:
 
 ## 🔍 Why This Prediction?
 
-### ☀️ Irradiation
 
-Irradiation value:
+☀️ Irradiation:
 
-**{irradiation}**
-
-Higher irradiation improves generation.
+{irradiation}
 
 
+🌡 Module Temperature:
 
-### 🌡 Temperature
-
-Module temperature:
-
-**{module_temp} °C**
-
-High temperature can reduce efficiency.
+{module_temp} °C
 
 
+🕒 Current Time:
 
-### 🕒 Time
+{current_time}
 
-Current solar time:
-
-**{current_time}**
-
-
-
-## ⚠️ Performance Check
-
-
-"""
-
-
-            if hour < 6 or hour >= 19:
-
-                return "Night condition detected. Solar generation is expected to be zero."
-
-            elif irradiation < 0.2:
-
-                return "Low sunlight detected. Reduced output expected."
-
-            else:
-
-                return """
-Solar generation appears normal.
 
 
 ## 🛠 Hardware Recommendation
 
-If actual plant output differs from prediction:
+
+If real output differs from prediction:
 
 - Check inverter status
 - Inspect panel cleanliness
 - Verify cable connections
-- Contact solar technician for hardware inspection
+- Contact solar technician
 
 
 ## ✅ Recommendations
 
-1. Maintain clean solar panels.
-2. Monitor inverter health.
-3. Compare predicted vs actual generation regularly.
+
+1. Maintain clean panels.
+2. Monitor inverter performance.
+3. Compare predicted and actual power regularly.
+
 """
