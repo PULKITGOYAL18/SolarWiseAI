@@ -3,6 +3,9 @@ from datetime import datetime
 import pandas as pd
 from fpdf import FPDF
 from dotenv import load_dotenv
+from zoneinfo import ZoneInfo
+import os
+
 
 from agents.input_agent import InputAgent
 from agents.prediction_agent import PredictionAgent
@@ -12,6 +15,16 @@ from agents.decision_agent import DecisionAgent
 
 load_dotenv()
 
+
+# ================= IST TIME =================
+
+IST = ZoneInfo("Asia/Kolkata")
+
+current_time = datetime.now(IST)
+
+
+
+# ================= PAGE =================
 
 st.set_page_config(
     page_title="SolarWise AI",
@@ -99,47 +112,127 @@ unsafe_allow_html=True
 
 
 
+
 # ================= PDF =================
 
 
-def generate_pdf(
-    report,
-    power,
-    daily_yield,
-    features
-):
+def generate_pdf(report,power,daily_yield,features):
 
     pdf = FPDF()
+
     pdf.add_page()
 
-    pdf.set_font("Helvetica", "B", 20)
-    pdf.cell(0, 15, "SolarWise AI Report", ln=True, align="C")
 
-    pdf.set_font("Helvetica", size=12)
-    pdf.cell(0, 10, f"Generated: {datetime.now()}", ln=True)
+    pdf.set_font(
+        "Helvetica",
+        "B",
+        20
+    )
+
+    pdf.cell(
+        0,
+        15,
+        "SolarWise AI Report",
+        ln=True,
+        align="C"
+    )
+
+
+    pdf.set_font(
+        "Helvetica",
+        size=12
+    )
+
+
+    pdf.cell(
+        0,
+        10,
+        f"Generated IST: {datetime.now(IST)}",
+        ln=True
+    )
+
+
     pdf.ln(5)
 
-    pdf.cell(0, 10, f"AC Power: {power:.2f} W", ln=True)
-    pdf.cell(0, 10, f"Estimated Daily Yield: {daily_yield:.2f} kWh", ln=True)
-    pdf.cell(0, 10, f"Temperature: {features['AMBIENT_TEMPERATURE']} C", ln=True)
-    pdf.cell(0, 10, f"Irradiation: {features['IRRADIATION']}", ln=True)
+
+    pdf.cell(
+        0,
+        10,
+        f"AC Power: {power:.2f} W",
+        ln=True
+    )
+
+
+    pdf.cell(
+        0,
+        10,
+        f"Daily Yield: {daily_yield:.2f} kWh",
+        ln=True
+    )
+
+
+    pdf.cell(
+        0,
+        10,
+        f"Temperature: {features['AMBIENT_TEMPERATURE']} C",
+        ln=True
+    )
+
+
+    pdf.cell(
+        0,
+        10,
+        f"Irradiation: {features['IRRADIATION']}",
+        ln=True
+    )
+
 
     pdf.ln(10)
-    pdf.multi_cell(0, 8, report.encode("ascii", "ignore").decode())
+
+
+    pdf.multi_cell(
+        0,
+        8,
+        report.encode(
+            "ascii",
+            "ignore"
+        ).decode()
+    )
+
 
     return bytes(pdf.output())
 
 
 
 
+
 # ================= SIDEBAR =================
 
+
 with st.sidebar:
+
     st.header("⚙️ Solar Parameters")
 
-    input_date = st.date_input("Date", datetime.now())
-    input_time = st.time_input("Current Time", datetime.now().time())
-    input_temp = st.slider("Ambient Temperature °C", -10, 60, 30)
+
+    input_date = st.date_input(
+        "Date",
+        current_time.date()
+    )
+
+
+    input_time = st.time_input(
+        "Current Time (IST)",
+        current_time.time()
+    )
+
+
+    input_temp = st.slider(
+        "Ambient Temperature °C",
+        -10,
+        60,
+        30
+    )
+
 
     weather = st.selectbox(
         "Weather",
@@ -152,134 +245,290 @@ with st.sidebar:
         ]
     )
 
-    context = st.text_area("Extra Context")
 
-    run = st.button("🚀 RUN AI ANALYSIS", use_container_width=True)
+    context = st.text_area(
+        "Extra Context"
+    )
+
+
+    run = st.button(
+        "🚀 RUN AI ANALYSIS",
+        use_container_width=True
+    )
+
 
 
 
 
 # ================= PIPELINE =================
 
+
 if run:
-    with st.spinner("🤖 Agents analysing solar conditions..."):
+
+    with st.spinner(
+        "🤖 Agents analysing solar conditions..."
+    ):
+
         try:
+
+
             # INPUT
+
             input_agent = InputAgent()
-            features = input_agent.extract(input_date, input_time, input_temp, weather, context)
+
+
+            features = input_agent.extract(
+                input_date,
+                input_time,
+                input_temp,
+                weather,
+                context
+            )
+
+
 
             # PREDICTION
+
             predictor = PredictionAgent()
-            prediction = predictor.predict(features)
-            power = prediction["predicted_ac_power_watt"]
+
+
+            prediction = predictor.predict(
+                features
+            )
+
+
+            power = prediction[
+                "predicted_ac_power_watt"
+            ]
+
+
             X = prediction["dataframe"]
 
-            # DAILY YIELD CALC
+
+
+
+
+            # DAILY YIELD
+
             hour = features["HOUR"]
+
             irradiation = features["IRRADIATION"]
 
+
             if hour < 6:
+
                 effective_hours = 8
+
             elif hour >= 19:
+
                 effective_hours = 0
+
             else:
-                effective_hours = 18 - hour
 
-            daily_yield = (power * irradiation * effective_hours) / 1000
+                effective_hours = 18-hour
 
-            # EXPLAIN
+
+
+            daily_yield = (
+                power *
+                irradiation *
+                effective_hours
+            ) / 1000
+
+
+
+
+
+            # SHAP
+
             explainer = ExplainabilityAgent()
-            explanation = explainer.explain(predictor.model, X)
+
+
+            explanation = explainer.explain(
+                predictor.model,
+                X
+            )
+
+
+
+
 
             # REPORT
+
             decision = DecisionAgent()
-            report = decision.generate(prediction, features, explanation)
+
+
+            report = decision.generate(
+                prediction,
+                features,
+                explanation
+            )
+
+
+
+
 
             # DASHBOARD
-            c1, c2, c3, c4 = st.columns(4)
+
+
+            c1,c2,c3,c4 = st.columns(4)
+
 
             with c1:
+
                 st.markdown(
-                    f"""
-                    <div class="card">
-                    <div class="small-title">⚡ AC POWER</div>
-                    <div class="metric">{power:.1f}</div>
-                    Watt
-                    </div>
-                    """,
-                    unsafe_allow_html=True
+                f"""
+                <div class="card">
+                <div class="small-title">⚡ AC POWER</div>
+                <div class="metric">{power:.1f}</div>
+                Watt
+                </div>
+                """,
+                unsafe_allow_html=True
                 )
+
+
 
             with c2:
+
                 st.markdown(
-                    f"""
-                    <div class="card">
-                    <div class="small-title">🔋 DAILY YIELD</div>
-                    <div class="metric">{daily_yield:.2f}</div>
-                    kWh
-                    </div>
-                    """,
-                    unsafe_allow_html=True
+                f"""
+                <div class="card">
+                <div class="small-title">🔋 DAILY YIELD</div>
+                <div class="metric">{daily_yield:.2f}</div>
+                kWh
+                </div>
+                """,
+                unsafe_allow_html=True
                 )
+
+
 
             with c3:
+
                 st.markdown(
-                    f"""
-                    <div class="card">
-                    <div class="small-title">🌡 TEMP</div>
-                    <div class="metric">{features['AMBIENT_TEMPERATURE']}</div>
-                    °C
-                    </div>
-                    """,
-                    unsafe_allow_html=True
+                f"""
+                <div class="card">
+                <div class="small-title">🌡 TEMP</div>
+                <div class="metric">
+                {features['AMBIENT_TEMPERATURE']}
+                </div>
+                °C
+                </div>
+                """,
+                unsafe_allow_html=True
                 )
+
+
 
             with c4:
-                if hour < 6 or hour >= 19:
-                    status = "🌙 Night"
-                elif 10 <= hour <= 15:
-                    status = "☀️ Peak"
+
+                if hour < 6 or hour >=19:
+                    status="🌙 Night"
+
+                elif 10<=hour<=15:
+                    status="☀️ Peak"
+
                 else:
-                    status = "🌤 Normal"
+                    status="🌤 Normal"
+
 
                 st.markdown(
-                    f"""
-                    <div class="card">
-                    <div class="small-title">STATUS</div>
-                    <div class="metric">{status}</div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
+                f"""
+                <div class="card">
+                <div class="small-title">STATUS</div>
+                <div class="metric">{status}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
                 )
 
+
+
+
             st.divider()
 
-            left, right = st.columns(2)
+
+
+            left,right = st.columns(2)
+
 
             with left:
-                st.subheader("📊 Feature Impact")
-                shap_data = explanation.get("shap_values", {})
-                df = pd.DataFrame(list(shap_data.items()), columns=["Feature", "Impact"])
-                st.bar_chart(df.set_index("Feature"))
+
+                st.subheader(
+                    "📊 Feature Impact"
+                )
+
+
+                shap_data = explanation.get(
+                    "shap_values",
+                    {}
+                )
+
+
+                df = pd.DataFrame(
+                    list(shap_data.items()),
+                    columns=[
+                        "Feature",
+                        "Impact"
+                    ]
+                )
+
+
+                st.bar_chart(
+                    df.set_index("Feature")
+                )
+
+
 
             with right:
-                st.subheader("🔍 AI Reasoning")
-                for x in explanation.get("analysis", []):
-                    st.write("✔️", x)
+
+                st.subheader(
+                    "🔍 AI Reasoning"
+                )
+
+
+                for x in explanation.get(
+                    "analysis",
+                    []
+                ):
+
+                    st.write(
+                        "✔️",
+                        x
+                    )
+
+
+
 
             st.divider()
 
-            st.subheader("🤖 Expert Solar Report")
+
+            st.subheader(
+                "🤖 Expert Solar Report"
+            )
+
+
             st.markdown(
                 f"""
                 <div class="report">
+
                 {report}
+
                 </div>
                 """,
                 unsafe_allow_html=True
             )
 
-            pdf = generate_pdf(report, power, daily_yield, features)
+
+
+            pdf = generate_pdf(
+                report,
+                power,
+                daily_yield,
+                features
+            )
+
 
             st.download_button(
                 "📥 Download Professional Report",
@@ -289,5 +538,10 @@ if run:
                 use_container_width=True
             )
 
+
+
         except Exception as e:
-            st.error(f"Pipeline Error: {e}")
+
+            st.error(
+                f"Pipeline Error: {e}"
+            )
