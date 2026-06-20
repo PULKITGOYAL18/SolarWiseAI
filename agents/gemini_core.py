@@ -4,17 +4,14 @@ from google import genai
 from dotenv import load_dotenv
 
 
-# Load environment variables
 load_dotenv()
 
 
-# Gemini client
 client = genai.Client(
     api_key=os.getenv("GOOGLE_API_KEY")
 )
 
 
-# Stable free-tier model
 MODEL_NAME = "gemini-2.0-flash-lite"
 
 
@@ -28,6 +25,19 @@ def ask_gemini(prompt):
             contents=prompt
         )
 
+
+        if response is None:
+            return "Gemini returned empty response."
+
+
+        if not hasattr(response, "text"):
+            return "Gemini response missing text."
+
+
+        if response.text is None or response.text.strip()=="":
+            return "Gemini generated empty report."
+
+
         return response.text
 
 
@@ -35,10 +45,10 @@ def ask_gemini(prompt):
 
         error = str(e)
 
-        # Handle temporary overload
+
         if "503" in error or "UNAVAILABLE" in error:
 
-            time.sleep(3)
+            time.sleep(5)
 
             try:
 
@@ -47,30 +57,25 @@ def ask_gemini(prompt):
                     contents=prompt
                 )
 
-                return response.text
+                if response.text:
+                    return response.text
 
 
             except Exception:
+                pass
 
-                return """
+
+        return """
 ## ⚠️ AI Report Temporarily Unavailable
 
-Gemini service is currently busy.
-
-Solar prediction results are still available:
+Solar prediction completed successfully.
 
 Please check:
 - AC power output
-- irradiation
-- temperature
+- Irradiation
+- Temperature
 - SHAP feature impact
 
-Try again after a few seconds.
-"""
-
-
-        return f"""
-## ⚠️ AI Analysis Error
-
-{error}
+If abnormal behaviour is detected,
+contact solar maintenance technicians.
 """
