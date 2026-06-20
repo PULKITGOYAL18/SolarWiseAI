@@ -7,10 +7,9 @@ class ExplainabilityAgent:
 
     def __init__(self):
 
-        # Render + Local compatible path
+        # Works locally + Render
         self.background_path = os.path.join(
-            os.path.dirname(__file__),
-            "..",
+            os.path.dirname(os.path.dirname(__file__)),
             "solar_data4.csv"
         )
 
@@ -19,7 +18,6 @@ class ExplainabilityAgent:
 
         try:
 
-            # Exact training order
             order = [
                 "HOUR",
                 "MINUTE",
@@ -30,25 +28,30 @@ class ExplainabilityAgent:
             ]
 
 
-            # Arrange input
+            # ensure dataframe
+            X = X.copy()
+
             X = X[order]
 
 
-            # -------------------------
-            # Load background
-            # -------------------------
-
+            # load background data
             full_df = pd.read_csv(
                 self.background_path
             )
 
+
             background = full_df[order]
 
 
-            # -------------------------
-            # XGBoost SHAP
-            # -------------------------
+            # reduce calculation
+            background_sample = shap.sample(
+                background,
+                20,
+                random_state=42
+            )
 
+
+            # Tree models support TreeExplainer
             explainer = shap.TreeExplainer(
                 model
             )
@@ -59,53 +62,27 @@ class ExplainabilityAgent:
             )
 
 
-            # Handle shape
             if isinstance(shap_values, list):
                 values = shap_values[0]
             else:
                 values = shap_values
 
 
-            # -------------------------
-            # Real SHAP values
-            # -------------------------
 
-            real_values = {}
+            shap_result = {}
 
 
-            for feature, impact in zip(
+            for feature, value in zip(
                 order,
                 values[0]
             ):
 
-                real_values[feature] = round(
-                    float(impact),
+                shap_result[feature] = round(
+                    float(value),
                     4
                 )
 
 
-            # -------------------------
-            # UI balanced values
-            # -------------------------
-
-            display_values = real_values.copy()
-
-
-            # Reduce time dominance
-            display_values["HOUR"] *= 0.35
-            display_values["MINUTE"] *= 0.15
-
-
-            # Increase physical factors
-            display_values["IRRADIATION"] *= 1.8
-            display_values["MODULE_TEMPERATURE"] *= 1.25
-            display_values["AMBIENT_TEMPERATURE"] *= 1.15
-
-
-
-            # -------------------------
-            # Human reasoning
-            # -------------------------
 
             irradiation = float(
                 X["IRRADIATION"].iloc[0]
@@ -115,7 +92,7 @@ class ExplainabilityAgent:
                 X["AMBIENT_TEMPERATURE"].iloc[0]
             )
 
-            module_temp = float(
+            module = float(
                 X["MODULE_TEMPERATURE"].iloc[0]
             )
 
@@ -124,71 +101,48 @@ class ExplainabilityAgent:
             )
 
 
-            reasons = []
+            reasons=[]
 
 
             if hour < 6 or hour >= 19:
 
                 reasons.append(
-                    "🌙 Night detected. Solar irradiation is unavailable, therefore AC power is expected near zero."
+                    "🌙 Night detected. Solar generation is naturally near zero."
                 )
 
 
-            elif irradiation > 0.75:
+            elif irradiation > 0.7:
 
                 reasons.append(
-                    "☀️ High irradiation is the strongest positive factor increasing AC power."
-                )
-
-
-            elif irradiation < 0.2:
-
-                reasons.append(
-                    "☁️ Low irradiation is limiting solar energy conversion."
+                    "☀️ High irradiation is increasing power generation."
                 )
 
 
             else:
 
                 reasons.append(
-                    "🌤 Moderate sunlight is producing normal generation."
+                    "☁️ Lower irradiation is limiting generation."
                 )
 
 
 
-            if module_temp > ambient + 15:
+            if module > ambient + 15:
 
                 reasons.append(
-                    "🌡 Higher module temperature may reduce panel efficiency."
+                    "🌡 High module temperature can reduce efficiency."
                 )
 
             else:
 
                 reasons.append(
-                    "🌡 Module temperature is within normal operating range."
-                )
-
-
-
-            if 10 <= hour <= 15:
-
-                reasons.append(
-                    "⚡ Peak solar hours detected."
-                )
-
-            elif hour < 8 or hour > 17:
-
-                reasons.append(
-                    "🕒 Sun angle is lower, reducing expected production."
+                    "🌡 Temperature condition is normal."
                 )
 
 
 
             return {
 
-                "real_shap_values": real_values,
-
-                "shap_values": display_values,
+                "shap_values": shap_result,
 
                 "analysis": reasons
 
@@ -198,21 +152,17 @@ class ExplainabilityAgent:
 
         except Exception as e:
 
-
             print(
                 "SHAP ERROR:",
                 e
             )
 
-
             return {
-
-                "real_shap_values": {},
 
                 "shap_values": {},
 
-                "analysis": [
-                    "Explainability unavailable"
+                "analysis":[
+                    f"Explainability failed: {e}"
                 ]
 
             }
